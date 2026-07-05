@@ -2,9 +2,18 @@
   "name": "@newlight/web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/svelte": "^6.0.0",
+    "@astrojs/tailwind": "^5.1.0",
+    "@newlight/design-system": "*",
+    "astro": "^4.16.0",
+    "svelte": "^5.0.0",
+    "tailwindcss": "^3.4.0"
   }
 }

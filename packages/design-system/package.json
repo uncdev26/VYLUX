@@ -1,0 +1,20 @@
+{
+  "name": "@newlight/design-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/lib/index.ts",
+    "./styles/tokens.css": "./src/lib/styles/tokens.css"
+  },
+  "scripts": {
+    "build": "svelte-package",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

@@ -1,0 +1,64 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { Button, Card } from '@newlight/design-system';
+---
+
+<Layout title="VYLUX - AI-Native Marketing Platform">
+  <main>
+    <section class="hero">
+      <h1>Welcome to VYLUX</h1>
+      <p>AI-Native Marketing Platform</p>
+      <Button variant="primary" size="lg" client:load>
+        Get Started
+      </Button>
+    </section>
+
+    <section class="features">
+      <Card variant="elevated" padding="lg">
+        <h2>AI-Powered Content</h2>
+        <p>Generate SEO-optimized content with AI</p>
+      </Card>
+
+      <Card variant="elevated" padding="lg">
+        <h2>Smart Forms</h2>
+        <p>Create intelligent forms with conditional logic</p>
+      </Card>
+
+      <Card variant="elevated" padding="lg">
+        <h2>WebMCP Integration</h2>
+        <p>Make your site discoverable by AI agents</p>
+      </Card>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    text-align: center;
+    gap: var(--space-6);
+  }
+
+  .hero h1 {
+    font-size: 4rem;
+    font-weight: var(--font-weight-heading);
+  }
+
+  .hero p {
+    font-size: 1.5rem;
+    color: var(--color-muted);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-6);
+    padding: var(--space-12) var(--space-6);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+</style>
