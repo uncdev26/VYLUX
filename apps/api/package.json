@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.1.0",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
+    "cors": "^2.8.5",
     "express": "^5.2.1",
     "multer": "^2.2.0",
     "uuid": "^14.0.1",
