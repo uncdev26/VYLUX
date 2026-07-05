@@ -54,4 +54,4 @@ COPY --from=base /app/node_modules ./node_modules
 EXPOSE ${PORT:-3000}
 
 # Start command - runs API server which also serves the static website
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["node", "apps/api/dist/index.mjs"]
