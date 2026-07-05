@@ -9,7 +9,7 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/svelte": "^6.0.0",
+    "@astrojs/svelte": "^7.0.0",
     "@astrojs/tailwind": "^5.1.0",
     "@newlight/design-system": "*",
     "astro": "^4.16.0",

@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/lib/index.ts",
-    "./styles/tokens.css": "./src/lib/styles/tokens.css"
+    ".": "./dist/index.js",
+    "./styles/tokens.css": "./dist/styles/tokens.css"
   },
   "scripts": {
     "build": "svelte-package",

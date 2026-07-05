@@ -1,4 +1,6 @@
 ---
+import '@newlight/design-system/styles/tokens.css';
+
 interface Props {
   title: string;
   description?: string;
@@ -27,8 +29,6 @@ const { title, description = '' } = Astro.props;
 </html>
 
 <style is:global>
-  @import '@newlight/design-system/styles/tokens.css';
-
   * {
     margin: 0;
     padding: 0;
