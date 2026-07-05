@@ -6,6 +6,19 @@ import type {
   Submission
 } from '@newlight/shared';
 
+export interface PaginationParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+}
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
 export class FormsService {
   private supabase: SupabaseClient;
 
@@ -77,15 +90,19 @@ export class FormsService {
     return data;
   }
 
-  async listForms(): Promise<Form[]> {
-    const { data, error } = await this.supabase
+  async listForms(pagination?: PaginationParams): Promise<PaginatedResult<Form>> {
+    const limit = Math.min(pagination?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const offset = pagination?.offset ?? 0;
+
+    const { data, error, count } = await this.supabase
       .from('forms')
-      .select('*')
+      .select('*', { count: 'exact' })
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data || [];
+    return { data: data || [], total: count ?? 0 };
   }
 
   async updateForm(id: string, input: UpdateFormInput): Promise<Form> {
@@ -128,14 +145,18 @@ export class FormsService {
     return data;
   }
 
-  async listSubmissions(formId: string): Promise<Submission[]> {
-    const { data, error } = await this.supabase
+  async listSubmissions(formId: string, pagination?: PaginationParams): Promise<PaginatedResult<Submission>> {
+    const limit = Math.min(pagination?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const offset = pagination?.offset ?? 0;
+
+    const { data, error, count } = await this.supabase
       .from('submissions')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('form_id', formId)
-      .order('submitted_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data || [];
+    return { data: data || [], total: count ?? 0 };
   }
 }

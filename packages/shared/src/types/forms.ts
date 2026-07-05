@@ -10,12 +10,21 @@ export interface FormField {
   validation?: Record<string, unknown>;
 }
 
+export interface FormSettings {
+  submit_message?: string;
+  redirect_url?: string;
+  notify_email?: string;
+  require_auth?: boolean;
+  max_submissions?: number;
+  [key: string]: unknown;
+}
+
 export interface Form {
   id: string;
   name: string;
   slug: string;
   fields: FormField[];
-  settings: Record<string, unknown>;
+  settings: FormSettings;
   status: FormStatus;
   created_at: string;
   updated_at: string;
@@ -26,13 +35,13 @@ export interface CreateFormInput {
   name: string;
   slug?: string;
   fields: FormField[];
-  settings?: Record<string, unknown>;
+  settings?: FormSettings;
 }
 
 export interface UpdateFormInput {
   name?: string;
   fields?: FormField[];
-  settings?: Record<string, unknown>;
+  settings?: FormSettings;
   status?: FormStatus;
 }
 

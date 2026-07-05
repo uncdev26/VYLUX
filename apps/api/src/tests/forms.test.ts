@@ -1,19 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Build a chainable mock that returns { data, error } at the terminal call
-function createMockChain(terminalResult: { data: unknown; error: unknown }) {
-  const chain: Record<string, unknown> = {};
-  const methods = ['select', 'eq', 'is', 'order', 'insert', 'update', 'single', 'limit', 'range'];
-
-  for (const method of methods) {
-    chain[method] = vi.fn().mockReturnValue(chain);
-  }
-  // Terminal: the last call in the chain resolves
-  chain.resolve = vi.fn().mockResolvedValue(terminalResult);
-
-  return chain;
-}
-
 const mockFrom = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -215,7 +201,7 @@ describe('FormsService', () => {
   });
 
   describe('listForms', () => {
-    it('should list forms', async () => {
+    it('should list forms with pagination', async () => {
       const mockForms = [
         {
           id: '1',
@@ -241,15 +227,32 @@ describe('FormsService', () => {
         }
       ];
 
-      const mockOrder = vi.fn().mockResolvedValue({ data: mockForms, error: null });
+      const mockRange = vi.fn().mockResolvedValue({ data: mockForms, error: null, count: 2 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const forms = await service.listForms();
+      const result = await service.listForms();
 
-      expect(Array.isArray(forms)).toBe(true);
-      expect(forms).toHaveLength(2);
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+    });
+
+    it('should respect pagination params', async () => {
+      const mockForms = [{ id: '1', name: 'Form 1', slug: 'form-1', fields: [], settings: {}, status: 'active', created_at: '2024-01-01T00:00:00Z', updated_at: '2024-01-01T00:00:00Z', deleted_at: null }];
+
+      const mockRange = vi.fn().mockResolvedValue({ data: mockForms, error: null, count: 10 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
+      const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
+      const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
+      mockFrom.mockReturnValue({ select: mockSelect });
+
+      const result = await service.listForms({ limit: 1, offset: 5 });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(10);
+      expect(mockRange).toHaveBeenCalledWith(5, 5);
     });
   });
 
@@ -305,7 +308,7 @@ describe('FormsService', () => {
         data: { name: 'John', email: 'john@example.com' },
         ip_address: null,
         user_agent: null,
-        submitted_at: '2024-01-01T00:00:00Z'
+        created_at: '2024-01-01T00:00:00Z'
       };
 
       const mockSingle = vi.fn().mockResolvedValue({ data: mockSubmission, error: null });
@@ -324,7 +327,7 @@ describe('FormsService', () => {
   });
 
   describe('listSubmissions', () => {
-    it('should list submissions for a form', async () => {
+    it('should list submissions with pagination', async () => {
       const mockSubmissions = [
         {
           id: '1',
@@ -332,7 +335,7 @@ describe('FormsService', () => {
           data: { name: 'John' },
           ip_address: null,
           user_agent: null,
-          submitted_at: '2024-01-01T00:00:00Z'
+          created_at: '2024-01-01T00:00:00Z'
         },
         {
           id: '2',
@@ -340,19 +343,36 @@ describe('FormsService', () => {
           data: { name: 'Jane' },
           ip_address: null,
           user_agent: null,
-          submitted_at: '2024-01-02T00:00:00Z'
+          created_at: '2024-01-02T00:00:00Z'
         }
       ];
 
-      const mockOrder = vi.fn().mockResolvedValue({ data: mockSubmissions, error: null });
+      const mockRange = vi.fn().mockResolvedValue({ data: mockSubmissions, error: null, count: 2 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockEq = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const submissions = await service.listSubmissions('form-1');
+      const result = await service.listSubmissions('form-1');
 
-      expect(Array.isArray(submissions)).toBe(true);
-      expect(submissions).toHaveLength(2);
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+    });
+
+    it('should respect pagination params', async () => {
+      const mockSubmissions = [{ id: '1', form_id: 'form-1', data: { name: 'John' }, ip_address: null, user_agent: null, created_at: '2024-01-01T00:00:00Z' }];
+
+      const mockRange = vi.fn().mockResolvedValue({ data: mockSubmissions, error: null, count: 5 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
+      const mockEq = vi.fn().mockReturnValue({ order: mockOrder });
+      const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
+      mockFrom.mockReturnValue({ select: mockSelect });
+
+      const result = await service.listSubmissions('form-1', { limit: 1, offset: 2 });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(5);
+      expect(mockRange).toHaveBeenCalledWith(2, 2);
     });
   });
 });

@@ -1,10 +1,27 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { FormsService } from '../services/forms';
 import { requireAuth } from '../middleware/auth';
+import type { FormField } from '@newlight/shared';
 
 const router = Router();
 const service = new FormsService();
+
+// ── Constants ────────────────────────────────────────────────────────
+
+const MAX_SUBMISSION_SIZE_BYTES = 1024 * 1024; // 1MB
+
+// ── Typed errors ─────────────────────────────────────────────────────
+
+interface ApiError {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+function isPostgresError(error: unknown): error is { code: string; message: string } {
+  return typeof error === 'object' && error !== null && 'code' in error && 'message' in error;
+}
 
 // ── Validation schemas ───────────────────────────────────────────────
 
@@ -32,6 +49,84 @@ const updateFormSchema = z.object({
   status: z.enum(['active', 'inactive', 'archived']).optional()
 });
 
+const paginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+
+// ── Submission validation ────────────────────────────────────────────
+
+function validateSubmissionData(
+  data: Record<string, unknown>,
+  fields: FormField[]
+): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  // Check required fields
+  for (const field of fields) {
+    if (field.required && (data[field.id] === undefined || data[field.id] === null || data[field.id] === '')) {
+      errors.push(`Field "${field.label}" is required`);
+    }
+  }
+
+  // Validate field types for provided values
+  for (const [fieldId, value] of Object.entries(data)) {
+    const field = fields.find(f => f.id === fieldId);
+    if (!field) continue; // Allow extra fields (they'll be stored as-is)
+
+    if (value === null || value === undefined || value === '') continue; // Skip empty values
+
+    switch (field.type) {
+      case 'email':
+        if (typeof value !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          errors.push(`Field "${field.label}" must be a valid email address`);
+        }
+        break;
+      case 'number':
+        if (typeof value !== 'number' && isNaN(Number(value))) {
+          errors.push(`Field "${field.label}" must be a number`);
+        }
+        break;
+      case 'select':
+      case 'radio':
+        if (field.options && field.options.length > 0 && !field.options.includes(String(value))) {
+          errors.push(`Field "${field.label}" must be one of: ${field.options.join(', ')}`);
+        }
+        break;
+      case 'checkbox':
+        if (typeof value !== 'boolean' && value !== 'true' && value !== 'false' && value !== '1' && value !== '0') {
+          errors.push(`Field "${field.label}" must be a boolean value`);
+        }
+        break;
+      case 'text':
+      case 'textarea':
+        if (typeof value !== 'string') {
+          errors.push(`Field "${field.label}" must be a string`);
+        }
+        break;
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// ── Error handler ────────────────────────────────────────────────────
+
+function handleApiError(res: Response, error: unknown, context: string): void {
+  if (isPostgresError(error)) {
+    if (error.code === '23505') {
+      res.status(409).json({ error: 'Form with this slug already exists' });
+      return;
+    }
+    if (error.code === 'PGRST116') {
+      res.status(404).json({ error: 'Form not found' });
+      return;
+    }
+  }
+  console.error(`${context}:`, error);
+  res.status(500).json({ error: context });
+}
+
 // ── Apply auth to all form management routes ─────────────────────────
 
 router.use(requireAuth);
@@ -39,18 +134,18 @@ router.use(requireAuth);
 // ── Form CRUD ────────────────────────────────────────────────────────
 
 // GET /api/forms
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const forms = await service.listForms();
-    res.json(forms);
+    const pagination = paginationSchema.parse(req.query);
+    const result = await service.listForms(pagination);
+    res.json(result);
   } catch (error) {
-    console.error('Failed to fetch forms:', error);
-    res.status(500).json({ error: 'Failed to fetch forms' });
+    handleApiError(res, error, 'Failed to fetch forms');
   }
 });
 
 // GET /api/forms/by-id/:id
-router.get('/by-id/:id', async (req, res) => {
+router.get('/by-id/:id', async (req: Request, res: Response) => {
   try {
     const form = await service.getFormById(req.params.id);
     if (!form) {
@@ -58,13 +153,12 @@ router.get('/by-id/:id', async (req, res) => {
     }
     res.json(form);
   } catch (error) {
-    console.error('Failed to fetch form:', error);
-    res.status(500).json({ error: 'Failed to fetch form' });
+    handleApiError(res, error, 'Failed to fetch form');
   }
 });
 
 // GET /api/forms/:slug
-router.get('/:slug', async (req, res) => {
+router.get('/:slug', async (req: Request, res: Response) => {
   try {
     const form = await service.getFormBySlug(req.params.slug);
     if (!form) {
@@ -72,13 +166,12 @@ router.get('/:slug', async (req, res) => {
     }
     res.json(form);
   } catch (error) {
-    console.error('Failed to fetch form:', error);
-    res.status(500).json({ error: 'Failed to fetch form' });
+    handleApiError(res, error, 'Failed to fetch form');
   }
 });
 
 // POST /api/forms
-router.post('/', async (req, res) => {
+router.post('/', async (req: Request, res: Response) => {
   try {
     const parsed = createFormSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -87,17 +180,13 @@ router.post('/', async (req, res) => {
 
     const form = await service.createForm(parsed.data);
     res.status(201).json(form);
-  } catch (error: any) {
-    if (error?.code === '23505') {
-      return res.status(409).json({ error: 'Form with this slug already exists' });
-    }
-    console.error('Failed to create form:', error);
-    res.status(500).json({ error: 'Failed to create form' });
+  } catch (error) {
+    handleApiError(res, error, 'Failed to create form');
   }
 });
 
 // PUT /api/forms/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: Request, res: Response) => {
   try {
     const parsed = updateFormSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -106,36 +195,31 @@ router.put('/:id', async (req, res) => {
 
     const form = await service.updateForm(req.params.id, parsed.data);
     res.json(form);
-  } catch (error: any) {
-    if (error?.code === 'PGRST116') {
-      return res.status(404).json({ error: 'Form not found' });
-    }
-    console.error('Failed to update form:', error);
-    res.status(500).json({ error: 'Failed to update form' });
+  } catch (error) {
+    handleApiError(res, error, 'Failed to update form');
   }
 });
 
 // DELETE /api/forms/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   try {
     await service.deleteForm(req.params.id);
     res.status(204).send();
   } catch (error) {
-    console.error('Failed to delete form:', error);
-    res.status(500).json({ error: 'Failed to delete form' });
+    handleApiError(res, error, 'Failed to delete form');
   }
 });
 
 // ── Submissions ──────────────────────────────────────────────────────
 
 // GET /api/forms/:id/submissions
-router.get('/:id/submissions', async (req, res) => {
+router.get('/:id/submissions', async (req: Request, res: Response) => {
   try {
-    const submissions = await service.listSubmissions(req.params.id);
-    res.json(submissions);
+    const pagination = paginationSchema.parse(req.query);
+    const result = await service.listSubmissions(req.params.id, pagination);
+    res.json(result);
   } catch (error) {
-    console.error('Failed to fetch submissions:', error);
-    res.status(500).json({ error: 'Failed to fetch submissions' });
+    handleApiError(res, error, 'Failed to fetch submissions');
   }
 });
 
@@ -144,8 +228,22 @@ router.get('/:id/submissions', async (req, res) => {
 const submitRouter = Router();
 
 // POST /api/forms-submit/:id/submit
-submitRouter.post('/:id/submit', async (req, res) => {
+submitRouter.post('/:id/submit', async (req: Request, res: Response) => {
   try {
+    // Check payload size
+    const contentLength = Number(req.headers['content-length'] || 0);
+    if (contentLength > MAX_SUBMISSION_SIZE_BYTES) {
+      return res.status(413).json({
+        error: 'Payload too large',
+        message: `Submission data must not exceed ${MAX_SUBMISSION_SIZE_BYTES / 1024 / 1024}MB`
+      });
+    }
+
+    // Validate data field exists and is an object
+    if (!req.body.data || typeof req.body.data !== 'object' || Array.isArray(req.body.data)) {
+      return res.status(400).json({ error: 'Invalid submission data', message: 'data must be a JSON object' });
+    }
+
     const form = await service.getFormById(req.params.id);
     if (!form) {
       return res.status(404).json({ error: 'Form not found' });
@@ -155,14 +253,23 @@ submitRouter.post('/:id/submit', async (req, res) => {
       return res.status(400).json({ error: 'Form is not active' });
     }
 
+    // Validate submission data against form fields
+    const validation = validateSubmissionData(req.body.data, form.fields);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'Validation failed',
+        message: 'Submission data does not match form requirements',
+        details: validation.errors
+      });
+    }
+
     const submission = await service.submitForm(req.params.id, {
       data: req.body.data
     });
 
     res.status(201).json(submission);
   } catch (error) {
-    console.error('Failed to submit form:', error);
-    res.status(500).json({ error: 'Failed to submit form' });
+    handleApiError(res, error, 'Failed to submit form');
   }
 });
 
