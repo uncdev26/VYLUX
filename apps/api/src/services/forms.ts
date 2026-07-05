@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createPostgrestFetch } from '@newlight/shared';
 import type {
   Form,
   CreateFormInput,
@@ -33,7 +34,9 @@ export class FormsService {
       throw new Error('Missing required environment variable: SUPABASE_ANON_KEY');
     }
 
-    this.supabase = createClient(url, key);
+    this.supabase = createClient(url, key, {
+      global: { fetch: createPostgrestFetch() }
+    });
   }
 
   private generateSlug(name: string): string {

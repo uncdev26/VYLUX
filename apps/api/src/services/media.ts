@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createPostgrestFetch } from '@newlight/shared';
 import { v4 as uuidv4 } from 'uuid';
 import type { Media, FileUpload, UploadMediaInput, UpdateMediaInput } from '@newlight/shared';
 import type { PaginationParams, PaginatedResult } from './content';
@@ -36,7 +37,9 @@ export class MediaService {
       throw new Error('Missing required environment variable: SUPABASE_ANON_KEY');
     }
 
-    this.supabase = createClient(url, key);
+    this.supabase = createClient(url, key, {
+      global: { fetch: createPostgrestFetch() }
+    });
   }
 
   async upload(file: FileUpload, options: UploadMediaInput = {}): Promise<Media> {

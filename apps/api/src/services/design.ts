@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createPostgrestFetch } from '@newlight/shared';
 import type { DesignToken, CreateTokenInput, UpdateTokenInput } from '@newlight/shared';
 
 export class DesignService {
@@ -15,7 +16,9 @@ export class DesignService {
       throw new Error('Missing required environment variable: SUPABASE_ANON_KEY');
     }
 
-    this.supabase = createClient(url, key);
+    this.supabase = createClient(url, key, {
+      global: { fetch: createPostgrestFetch() }
+    });
   }
 
   async createToken(input: CreateTokenInput): Promise<DesignToken> {
