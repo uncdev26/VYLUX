@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  supabase:
+    image: supabase/supabase:latest
+    ports:
+      - "5432:5432"
+      - "8000:8000"
+    environment:
+      - POSTGRES_PASSWORD=your-password
+      - JWT_SECRET=your-jwt-secret
+    volumes:
+      - supabase-data:/var/lib/postgresql/data
+
+  lobehub:
+    image: lobehub/lobehub:latest
+    ports:
+      - "3210:3210"
+    environment:
+      - DATABASE_URL=postgresql://postgres:your-password@supabase:5432/postgres
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - supabase
+
+  website:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "4321:4321"
+    environment:
+      - PUBLIC_SUPABASE_URL=http://supabase:8000
+      - PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    depends_on:
+      - supabase
+
+volumes:
+  supabase-data:

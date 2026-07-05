@@ -1,0 +1,9 @@
+{
+  "name": "@newlight/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "lobe-cli dev",
+    "build": "lobe-cli build"
+  }
+}
