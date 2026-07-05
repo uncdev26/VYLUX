@@ -4,6 +4,7 @@ export default {
   },
   package: {
     emitTypes: true,
-    exports: (filepath) => !filepath.endsWith('.svelte')
+    source: './src',
+    dir: './dist'
   }
 };

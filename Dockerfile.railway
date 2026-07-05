@@ -26,13 +26,10 @@ COPY . .
 # Build shared package
 RUN npm run build --workspace=@newlight/shared
 
-# Build design system
-RUN npm run build --workspace=@newlight/design-system
-
 # Build API
 RUN npm run build --workspace=@newlight/api
 
-# Build website
+# Build website (uses design-system source files directly via Vite)
 RUN npm run build --workspace=@newlight/web
 
 # Production stage
@@ -49,7 +46,7 @@ COPY --from=base /app/apps/web/dist ./apps/web/dist
 COPY --from=base /app/apps/web/package.json ./apps/web/
 COPY --from=base /app/packages/shared/dist ./packages/shared/dist
 COPY --from=base /app/packages/shared/package.json ./packages/shared/
-COPY --from=base /app/packages/design-system/dist ./packages/design-system/dist
+COPY --from=base /app/packages/design-system/src ./packages/design-system/src
 COPY --from=base /app/packages/design-system/package.json ./packages/design-system/
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/apps/api/node_modules ./apps/api/node_modules

@@ -11,6 +11,9 @@ export default defineConfig({
   vite: {
     optimizeDeps: {
       include: ['@newlight/design-system']
+    },
+    svelte: {
+      preprocess: []
     }
   }
 });
