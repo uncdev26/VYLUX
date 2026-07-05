@@ -1,6 +1,26 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import type { Media, FileUpload, UploadMediaInput, UpdateMediaInput } from '@newlight/shared';
+import type { PaginationParams, PaginatedResult } from './content';
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'image/avif',
+  'video/mp4',
+  'video/webm',
+  'audio/mpeg',
+  'audio/wav',
+  'application/pdf',
+]);
 
 export class MediaService {
   private supabase: SupabaseClient;
@@ -20,24 +40,27 @@ export class MediaService {
   }
 
   async upload(file: FileUpload, options: UploadMediaInput = {}): Promise<Media> {
+    if (file.buffer.length > MAX_FILE_SIZE) {
+      throw new Error(`File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+    }
+
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      throw new Error(`File type ${file.mimetype} is not allowed`);
+    }
+
     const id = uuidv4();
     const ext = file.originalname.split('.').pop();
     const filename = `${id}.${ext}`;
-    const path = `media/${filename}`;
+    const storagePath = `media/${filename}`;
 
     // Upload to Supabase Storage
     const { error: uploadError } = await this.supabase.storage
       .from('assets')
-      .upload(path, file.buffer, {
+      .upload(storagePath, file.buffer, {
         contentType: file.mimetype
       });
 
     if (uploadError) throw uploadError;
-
-    // Get public URL
-    const { data: urlData } = this.supabase.storage
-      .from('assets')
-      .getPublicUrl(path);
 
     // Save to database
     const { data, error } = await this.supabase
@@ -45,11 +68,15 @@ export class MediaService {
       .insert({
         id,
         filename: file.originalname,
-        url: urlData.publicUrl,
-        type: file.mimetype,
+        storage_path: storagePath,
+        mime_type: file.mimetype,
         size: file.buffer.length,
-        alt_text: options.alt_text,
-        folder_id: options.folder_id
+        width: options.width ?? null,
+        height: options.height ?? null,
+        alt_text: options.alt_text ?? null,
+        caption: options.caption ?? null,
+        metadata: options.metadata ?? null,
+        folder_id: options.folder_id ?? null
       })
       .select()
       .single();
@@ -73,30 +100,34 @@ export class MediaService {
     return data;
   }
 
-  async list(options?: { folder_id?: string }): Promise<Media[]> {
+  async list(
+    filters?: { folder_id?: string },
+    pagination?: PaginationParams,
+  ): Promise<PaginatedResult<Media>> {
+    const limit = Math.min(pagination?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const offset = pagination?.offset ?? 0;
+
     let query = this.supabase
       .from('media')
-      .select('*')
+      .select('*', { count: 'exact' })
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    if (options?.folder_id) {
-      query = query.eq('folder_id', options.folder_id);
+    if (filters?.folder_id) {
+      query = query.eq('folder_id', filters.folder_id);
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) throw error;
-    return data || [];
+    return { data: data || [], total: count ?? 0 };
   }
 
   async update(id: string, input: UpdateMediaInput): Promise<Media> {
     const { data, error } = await this.supabase
       .from('media')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString()
-      })
+      .update(input)
       .eq('id', id)
       .is('deleted_at', null)
       .select()
@@ -110,7 +141,8 @@ export class MediaService {
     const { error } = await this.supabase
       .from('media')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+      .eq('id', id)
+      .is('deleted_at', null);
 
     if (error) throw error;
   }

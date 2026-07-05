@@ -6,7 +6,10 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 const service = new MediaService();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+});
 
 // Apply auth to all media routes
 router.use(requireAuth);
@@ -14,14 +17,27 @@ router.use(requireAuth);
 // Validation schemas
 const updateMediaSchema = z.object({
   alt_text: z.string().optional(),
+  caption: z.string().optional(),
   folder_id: z.string().uuid().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const paginationSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 });
 
 // GET /api/media
 router.get('/', async (req, res) => {
   try {
-    const media = await service.list(req.query as { folder_id?: string });
-    res.json(media);
+    const pagination = paginationSchema.safeParse(req.query);
+    const folder_id = req.query.folder_id as string | undefined;
+
+    const result = await service.list(
+      { folder_id },
+      pagination.success ? pagination.data : undefined,
+    );
+    res.json(result);
   } catch (error) {
     console.error('Failed to fetch media:', error);
     res.status(500).json({ error: 'Failed to fetch media' });
@@ -51,11 +67,18 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     const media = await service.upload(req.file, {
       alt_text: req.body.alt_text,
-      folder_id: req.body.folder_id
+      caption: req.body.caption,
+      folder_id: req.body.folder_id,
+      width: req.body.width ? Number(req.body.width) : undefined,
+      height: req.body.height ? Number(req.body.height) : undefined,
+      metadata: req.body.metadata ? JSON.parse(req.body.metadata) : undefined,
     });
 
     res.status(201).json(media);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes('exceeds maximum size') || error?.message?.includes('not allowed')) {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('Failed to upload media:', error);
     res.status(500).json({ error: 'Failed to upload media' });
   }

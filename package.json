@@ -13,13 +13,7 @@
     "lint": "turbo lint"
   },
   "devDependencies": {
-    "@types/multer": "^2.2.0",
-    "@types/uuid": "^10.0.0",
     "turbo": "^2.0.0",
     "typescript": "^5.5.0"
-  },
-  "dependencies": {
-    "multer": "^2.2.0",
-    "uuid": "^14.0.1"
   }
 }

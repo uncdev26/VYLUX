@@ -9,7 +9,7 @@ const mockStorageGetPublicUrl = vi.fn().mockReturnValue({
 // Build a chainable mock for database operations
 function createChainMock(terminalResult: { data: unknown; error: unknown }) {
   const chain: Record<string, unknown> = {};
-  const methods = ['select', 'eq', 'is', 'order', 'insert', 'update', 'single'];
+  const methods = ['select', 'eq', 'is', 'order', 'insert', 'update', 'single', 'range'];
 
   for (const method of methods) {
     chain[method] = vi.fn().mockReturnValue(chain);
@@ -63,10 +63,14 @@ describe('MediaService', () => {
       const mockMedia = {
         id: '1',
         filename: 'test.jpg',
-        url: 'https://test.supabase.co/storage/v1/object/public/assets/media/test.jpg',
-        type: 'image/jpeg',
+        storage_path: 'media/1.jpg',
+        mime_type: 'image/jpeg',
         size: 4,
+        width: null,
+        height: null,
         alt_text: 'Test image',
+        caption: null,
+        metadata: null,
         folder_id: null,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
@@ -88,7 +92,7 @@ describe('MediaService', () => {
 
       expect(media).toBeDefined();
       expect(media.filename).toBe('test.jpg');
-      expect(media.type).toBe('image/jpeg');
+      expect(media.mime_type).toBe('image/jpeg');
       expect(media.alt_text).toBe('Test image');
       expect(mockStorageUpload).toHaveBeenCalled();
     });
@@ -104,6 +108,27 @@ describe('MediaService', () => {
 
       await expect(service.upload(file)).rejects.toThrow('Upload failed');
     });
+
+    it('should reject files exceeding max size', async () => {
+      const largeBuffer = Buffer.alloc(51 * 1024 * 1024); // 51MB
+      const file = {
+        buffer: largeBuffer,
+        originalname: 'large.jpg',
+        mimetype: 'image/jpeg'
+      };
+
+      await expect(service.upload(file)).rejects.toThrow('exceeds maximum size');
+    });
+
+    it('should reject disallowed MIME types', async () => {
+      const file = {
+        buffer: Buffer.from('test'),
+        originalname: 'script.exe',
+        mimetype: 'application/x-executable'
+      };
+
+      await expect(service.upload(file)).rejects.toThrow('not allowed');
+    });
   });
 
   describe('getById', () => {
@@ -111,10 +136,14 @@ describe('MediaService', () => {
       const mockMedia = {
         id: '1',
         filename: 'test.jpg',
-        url: 'https://test.supabase.co/storage/v1/object/public/assets/media/test.jpg',
-        type: 'image/jpeg',
+        storage_path: 'media/1.jpg',
+        mime_type: 'image/jpeg',
         size: 4,
+        width: null,
+        height: null,
         alt_text: null,
+        caption: null,
+        metadata: null,
         folder_id: null,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
@@ -148,15 +177,19 @@ describe('MediaService', () => {
   });
 
   describe('list', () => {
-    it('should list media files', async () => {
+    it('should list media files with pagination', async () => {
       const mockMedia = [
         {
           id: '1',
           filename: 'test.jpg',
-          url: 'https://test.supabase.co/storage/v1/object/public/assets/media/test.jpg',
-          type: 'image/jpeg',
+          storage_path: 'media/1.jpg',
+          mime_type: 'image/jpeg',
           size: 4,
+          width: null,
+          height: null,
           alt_text: null,
+          caption: null,
+          metadata: null,
           folder_id: null,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
@@ -164,30 +197,35 @@ describe('MediaService', () => {
         }
       ];
 
-      const mockOrder = vi.fn().mockResolvedValue({ data: mockMedia, error: null });
+      const mockRange = vi.fn().mockResolvedValue({ data: mockMedia, error: null, count: 1 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const media = await service.list();
+      const result = await service.list();
 
-      expect(Array.isArray(media)).toBe(true);
-      expect(media).toHaveLength(1);
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(1);
     });
 
     it('should filter by folder_id', async () => {
       const mockMedia: unknown[] = [];
 
-      const mockEq = vi.fn().mockResolvedValue({ data: mockMedia, error: null });
-      const mockOrder = vi.fn().mockReturnValue({ eq: mockEq });
+      // Chain: select -> is -> order -> range -> eq -> (terminal)
+      // range is called before eq in the service
+      const mockEqTerminal = vi.fn().mockResolvedValue({ data: mockMedia, error: null, count: 0 });
+      const mockRange = vi.fn().mockReturnValue({ eq: mockEqTerminal });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const media = await service.list({ folder_id: 'folder-1' });
+      const result = await service.list({ folder_id: 'folder-1' });
 
-      expect(Array.isArray(media)).toBe(true);
-      expect(mockEq).toHaveBeenCalledWith('folder_id', 'folder-1');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(mockEqTerminal).toHaveBeenCalledWith('folder_id', 'folder-1');
     });
   });
 
@@ -196,10 +234,14 @@ describe('MediaService', () => {
       const mockMedia = {
         id: '1',
         filename: 'test.jpg',
-        url: 'https://test.supabase.co/storage/v1/object/public/assets/media/test.jpg',
-        type: 'image/jpeg',
+        storage_path: 'media/1.jpg',
+        mime_type: 'image/jpeg',
         size: 4,
+        width: null,
+        height: null,
         alt_text: 'Updated alt text',
+        caption: null,
+        metadata: null,
         folder_id: null,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-02T00:00:00Z',
@@ -221,8 +263,9 @@ describe('MediaService', () => {
   });
 
   describe('delete', () => {
-    it('should soft delete media', async () => {
-      const mockEq = vi.fn().mockResolvedValue({ data: null, error: null });
+    it('should soft delete media with deleted_at guard', async () => {
+      const mockIs = vi.fn().mockResolvedValue({ data: null, error: null });
+      const mockEq = vi.fn().mockReturnValue({ is: mockIs });
       const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq });
       mockFrom.mockReturnValue({ update: mockUpdate });
 
@@ -230,6 +273,7 @@ describe('MediaService', () => {
 
       expect(mockFrom).toHaveBeenCalledWith('media');
       expect(mockUpdate).toHaveBeenCalledWith({ deleted_at: expect.any(String) });
+      expect(mockIs).toHaveBeenCalledWith('deleted_at', null);
     });
   });
 });
