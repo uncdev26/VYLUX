@@ -2,7 +2,7 @@
 # Run: ./scripts/setup-local.sh && docker compose up -d
 
 services:
-  # PostgreSQL with Supabase extensions
+  # PostgreSQL with Supabase extensions (VYLUX data)
   db:
     image: supabase/postgres:15.14.1.142
     ports:
@@ -51,5 +51,86 @@ services:
       postgrest:
         condition: service_started
 
+  # ===========================================
+  # LobeHub Stack
+  # ===========================================
+
+  # LobeHub database (ParadeDB with pg_search extension)
+  lobehub-db:
+    image: paradedb/paradedb:latest-pg17
+    environment:
+      POSTGRES_DB: lobehub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - lobehub-data:/var/lib/postgresql/data
+    command: ["postgres", "-c", "shared_preload_libraries=pg_search,pg_cron"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis (LobeHub cache)
+  lobehub-redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1000 --appendonly yes
+    volumes:
+      - lobehub-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MinIO - S3-compatible storage for LobeHub
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # LobeHub - ChatGPT-like AI dashboard
+  lobehub:
+    image: lobehub/lobehub:latest
+    ports:
+      - "3210:3210"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@lobehub-db:5432/lobehub
+      - REDIS_URL=redis://lobehub-redis:6379
+      - KEY_VAULTS_SECRET=${JWT_SECRET:-changeme}
+      - AUTH_SECRET=${JWT_SECRET:-changeme}
+      - APP_URL=http://localhost:3210
+      - INTERNAL_APP_URL=http://localhost:3210
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=lobe
+      - S3_ENABLE_PATH_STYLE=1
+      - S3_SET_ACL=0
+      - S3_ACCESS_KEY=admin
+      - S3_ACCESS_KEY_ID=admin
+      - S3_SECRET_ACCESS_KEY=${POSTGRES_PASSWORD:-changeme}
+      - LLM_VISION_IMAGE_USE_BASE64=1
+    depends_on:
+      lobehub-db:
+        condition: service_healthy
+      lobehub-redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: always
+
 volumes:
   supabase-data:
+  lobehub-data:
+  lobehub-redis:
+  minio-data:
