@@ -14,6 +14,8 @@
 [![Astro](https://img.shields.io/badge/Astro-4.0-FF5D01.svg)](https://astro.build)
 [![Svelte](https://img.shields.io/badge/Svelte-5-FF3E00.svg)](https://svelte.dev)
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?templateUrl=https://github.com/uncdev26/VYLUX)
+
 [Documentation](docs/) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Features](#-features) • [Contributing](#-contributing)
 
 </div>
