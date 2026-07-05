@@ -11,6 +11,19 @@ import type {
   UpdateCategoryInput
 } from '@newlight/shared';
 
+export interface PaginationParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+}
+
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
 export class ContentService {
   private supabase: SupabaseClient;
 
@@ -80,12 +93,19 @@ export class ContentService {
     return data;
   }
 
-  async listPosts(filters?: { status?: string; category_id?: string }): Promise<Post[]> {
+  async listPosts(
+    filters?: { status?: string; category_id?: string },
+    pagination?: PaginationParams,
+  ): Promise<PaginatedResult<Post>> {
+    const limit = Math.min(pagination?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const offset = pagination?.offset ?? 0;
+
     let query = this.supabase
       .from('posts')
-      .select('*')
+      .select('*', { count: 'exact' })
       .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (filters?.status) {
       query = query.eq('status', filters.status);
@@ -95,10 +115,10 @@ export class ContentService {
       query = query.eq('category_id', filters.category_id);
     }
 
-    const { data, error } = await query;
+    const { data, error, count } = await query;
 
     if (error) throw error;
-    return data || [];
+    return { data: data || [], total: count ?? 0 };
   }
 
   async updatePost(id: string, input: UpdatePostInput): Promise<Post> {
@@ -157,15 +177,19 @@ export class ContentService {
     return data;
   }
 
-  async listPages(): Promise<Page[]> {
-    const { data, error } = await this.supabase
+  async listPages(pagination?: PaginationParams): Promise<PaginatedResult<Page>> {
+    const limit = Math.min(pagination?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const offset = pagination?.offset ?? 0;
+
+    const { data, error, count } = await this.supabase
       .from('pages')
-      .select('*')
+      .select('*', { count: 'exact' })
       .is('deleted_at', null)
-      .order('title');
+      .order('title')
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data || [];
+    return { data: data || [], total: count ?? 0 };
   }
 
   async updatePage(id: string, input: UpdatePageInput): Promise<Page> {
@@ -220,15 +244,19 @@ export class ContentService {
     return data;
   }
 
-  async listCategories(): Promise<Category[]> {
-    const { data, error } = await this.supabase
+  async listCategories(pagination?: PaginationParams): Promise<PaginatedResult<Category>> {
+    const limit = Math.min(pagination?.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const offset = pagination?.offset ?? 0;
+
+    const { data, error, count } = await this.supabase
       .from('categories')
-      .select('*')
+      .select('*', { count: 'exact' })
       .is('deleted_at', null)
-      .order('name');
+      .order('name')
+      .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data || [];
+    return { data: data || [], total: count ?? 0 };
   }
 
   async updateCategory(id: string, input: UpdateCategoryInput): Promise<Category> {

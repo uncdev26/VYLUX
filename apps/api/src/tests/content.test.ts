@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Build a chainable mock that returns { data, error } at the terminal call
 function createMockChain(terminalResult: { data: unknown; error: unknown }) {
   const chain: Record<string, unknown> = {};
-  const methods = ['select', 'eq', 'is', 'order', 'insert', 'update', 'single', 'limit'];
+  const methods = ['select', 'eq', 'is', 'order', 'insert', 'update', 'single', 'limit', 'range'];
 
   for (const method of methods) {
     chain[method] = vi.fn().mockReturnValue(chain);
@@ -177,18 +177,20 @@ describe('ContentService', () => {
         }
       ];
 
-      // Chain: .select('*').is('deleted_at',null).order(...).eq('status',...)
-      const mockEq = vi.fn().mockResolvedValue({ data: mockPosts, error: null });
-      const mockOrder = vi.fn().mockReturnValue({ eq: mockEq });
+      // Chain: .select('*').is('deleted_at',null).order(...).range(...).eq('status',...)
+      const mockEq = vi.fn().mockResolvedValue({ data: mockPosts, error: null, count: 1 });
+      const mockRange = vi.fn().mockReturnValue({ eq: mockEq });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const posts = await service.listPosts({ status: 'published' });
+      const result = await service.listPosts({ status: 'published' });
 
-      expect(Array.isArray(posts)).toBe(true);
-      expect(posts).toHaveLength(1);
-      expect(posts[0].status).toBe('published');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].status).toBe('published');
+      expect(result.total).toBe(1);
     });
 
     it('should update a post', async () => {
@@ -346,15 +348,17 @@ describe('ContentService', () => {
         }
       ];
 
-      const mockOrder = vi.fn().mockResolvedValue({ data: mockPages, error: null });
+      const mockRange = vi.fn().mockResolvedValue({ data: mockPages, error: null, count: 1 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const pages = await service.listPages();
+      const result = await service.listPages();
 
-      expect(Array.isArray(pages)).toBe(true);
-      expect(pages).toHaveLength(1);
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.total).toBe(1);
     });
   });
 
@@ -397,16 +401,18 @@ describe('ContentService', () => {
         }
       ];
 
-      const mockOrder = vi.fn().mockResolvedValue({ data: mockCategories, error: null });
+      const mockRange = vi.fn().mockResolvedValue({ data: mockCategories, error: null, count: 1 });
+      const mockOrder = vi.fn().mockReturnValue({ range: mockRange });
       const mockIs = vi.fn().mockReturnValue({ order: mockOrder });
       const mockSelect = vi.fn().mockReturnValue({ is: mockIs });
       mockFrom.mockReturnValue({ select: mockSelect });
 
-      const categories = await service.listCategories();
+      const result = await service.listCategories();
 
-      expect(Array.isArray(categories)).toBe(true);
-      expect(categories).toHaveLength(1);
-      expect(categories[0].name).toBe('Technology');
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].name).toBe('Technology');
+      expect(result.total).toBe(1);
     });
   });
 });

@@ -1,9 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ContentService } from '../services/content';
+import { requireAuth } from '../middleware/auth';
+import { sanitizeFields } from '../utils/sanitize';
 
 const router = Router();
 const service = new ContentService();
+
+// Content fields that need HTML sanitization
+const SANITIZE_FIELDS = ['content', 'excerpt', 'seo_description', 'description'];
+
+// ── Helper ───────────────────────────────────────────────────────────
+
+function parsePagination(query: Record<string, unknown>) {
+  const limit = Math.max(1, Math.min(100, Number(query.limit) || 20));
+  const offset = Math.max(0, Number(query.offset) || 0);
+  return { limit, offset };
+}
 
 // ── Validation schemas ───────────────────────────────────────────────
 
@@ -20,6 +33,8 @@ const createPostSchema = z.object({
   seo_description: z.string().optional(),
 });
 
+// slug is omitted because changing a published URL breaks links and SEO;
+// use a dedicated redirect/rename flow instead.
 const updatePostSchema = z.object({
   title: z.string().min(1).optional(),
   content: z.string().optional(),
@@ -30,6 +45,21 @@ const updatePostSchema = z.object({
   featured_image: z.string().url().optional(),
   seo_title: z.string().optional(),
   seo_description: z.string().optional(),
+});
+
+const updatePageSchema = z.object({
+  title: z.string().min(1).optional(),
+  content: z.string().optional(),
+  template: z.string().optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  seo_title: z.string().optional(),
+  seo_description: z.string().optional(),
+});
+
+const updateCategorySchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  parent_id: z.string().uuid().optional(),
 });
 
 const createPageSchema = z.object({
@@ -48,16 +78,38 @@ const createCategorySchema = z.object({
   parent_id: z.string().uuid().optional(),
 });
 
+// ── Apply auth to all content routes ─────────────────────────────────
+
+router.use(requireAuth);
+
 // ── Posts ────────────────────────────────────────────────────────────
 
 // GET /api/content/posts
 router.get('/posts', async (req, res) => {
   try {
-    const posts = await service.listPosts(req.query as { status?: string; category_id?: string });
-    res.json(posts);
+    const pagination = parsePagination(req.query);
+    const result = await service.listPosts(
+      req.query as { status?: string; category_id?: string },
+      pagination,
+    );
+    res.json(result);
   } catch (error) {
     console.error('Failed to fetch posts:', error);
     res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+// GET /api/content/posts/by-id/:id
+router.get('/posts/by-id/:id', async (req, res) => {
+  try {
+    const post = await service.getPostById(req.params.id);
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    res.json(post);
+  } catch (error) {
+    console.error('Failed to fetch post:', error);
+    res.status(500).json({ error: 'Failed to fetch post' });
   }
 });
 
@@ -82,7 +134,8 @@ router.post('/posts', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
     }
-    const post = await service.createPost(parsed.data);
+    const sanitized = sanitizeFields(parsed.data, SANITIZE_FIELDS);
+    const post = await service.createPost(sanitized);
     res.status(201).json(post);
   } catch (error: any) {
     if (error?.code === '23505') {
@@ -100,7 +153,8 @@ router.put('/posts/:id', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
     }
-    const post = await service.updatePost(req.params.id, parsed.data);
+    const sanitized = sanitizeFields(parsed.data, SANITIZE_FIELDS);
+    const post = await service.updatePost(req.params.id, sanitized);
     res.json(post);
   } catch (error: any) {
     if (error?.code === 'PGRST116') {
@@ -141,8 +195,9 @@ router.post('/posts/:id/publish', async (req, res) => {
 // GET /api/content/pages
 router.get('/pages', async (req, res) => {
   try {
-    const pages = await service.listPages();
-    res.json(pages);
+    const pagination = parsePagination(req.query);
+    const result = await service.listPages(pagination);
+    res.json(result);
   } catch (error) {
     console.error('Failed to fetch pages:', error);
     res.status(500).json({ error: 'Failed to fetch pages' });
@@ -170,7 +225,8 @@ router.post('/pages', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
     }
-    const page = await service.createPage(parsed.data);
+    const sanitized = sanitizeFields(parsed.data, SANITIZE_FIELDS);
+    const page = await service.createPage(sanitized);
     res.status(201).json(page);
   } catch (error: any) {
     if (error?.code === '23505') {
@@ -181,13 +237,44 @@ router.post('/pages', async (req, res) => {
   }
 });
 
+// PUT /api/content/pages/:id
+router.put('/pages/:id', async (req, res) => {
+  try {
+    const parsed = updatePageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+    const sanitized = sanitizeFields(parsed.data, SANITIZE_FIELDS);
+    const page = await service.updatePage(req.params.id, sanitized);
+    res.json(page);
+  } catch (error: any) {
+    if (error?.code === 'PGRST116') {
+      return res.status(404).json({ error: 'Page not found' });
+    }
+    console.error('Failed to update page:', error);
+    res.status(500).json({ error: 'Failed to update page' });
+  }
+});
+
+// DELETE /api/content/pages/:id
+router.delete('/pages/:id', async (req, res) => {
+  try {
+    await service.deletePage(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to delete page:', error);
+    res.status(500).json({ error: 'Failed to delete page' });
+  }
+});
+
 // ── Categories ───────────────────────────────────────────────────────
 
 // GET /api/content/categories
 router.get('/categories', async (req, res) => {
   try {
-    const categories = await service.listCategories();
-    res.json(categories);
+    const pagination = parsePagination(req.query);
+    const result = await service.listCategories(pagination);
+    res.json(result);
   } catch (error) {
     console.error('Failed to fetch categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });
@@ -201,7 +288,8 @@ router.post('/categories', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
     }
-    const category = await service.createCategory(parsed.data);
+    const sanitized = sanitizeFields(parsed.data, ['description']);
+    const category = await service.createCategory(sanitized);
     res.status(201).json(category);
   } catch (error: any) {
     if (error?.code === '23505') {
@@ -209,6 +297,36 @@ router.post('/categories', async (req, res) => {
     }
     console.error('Failed to create category:', error);
     res.status(500).json({ error: 'Failed to create category' });
+  }
+});
+
+// PUT /api/content/categories/:id
+router.put('/categories/:id', async (req, res) => {
+  try {
+    const parsed = updateCategorySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+    const sanitized = sanitizeFields(parsed.data, ['description']);
+    const category = await service.updateCategory(req.params.id, sanitized);
+    res.json(category);
+  } catch (error: any) {
+    if (error?.code === 'PGRST116') {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+    console.error('Failed to update category:', error);
+    res.status(500).json({ error: 'Failed to update category' });
+  }
+});
+
+// DELETE /api/content/categories/:id
+router.delete('/categories/:id', async (req, res) => {
+  try {
+    await service.deleteCategory(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Failed to delete category:', error);
+    res.status(500).json({ error: 'Failed to delete category' });
   }
 });
 
