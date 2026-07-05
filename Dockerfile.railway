@@ -3,14 +3,11 @@
 
 FROM node:20-slim AS base
 
-# Install pnpm
-RUN npm install -g pnpm
-
 # Set working directory
 WORKDIR /app
 
 # Copy package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY package.json package-lock.json turbo.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
@@ -18,31 +15,28 @@ COPY packages/design-system/package.json ./packages/design-system/
 COPY packages/database/package.json ./packages/database/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN npm install
 
 # Copy source code
 COPY . .
 
 # Build shared package
-RUN pnpm --filter @newlight/shared build
+RUN npm run build --workspace=@newlight/shared
 
 # Build API
-RUN pnpm --filter @newlight/api build
+RUN npm run build --workspace=@newlight/api
 
 # Build website
-RUN pnpm --filter @newlight/web build
+RUN npm run build --workspace=@newlight/web
 
 # Production stage
 FROM node:20-slim AS production
-
-RUN npm install -g pnpm
 
 WORKDIR /app
 
 # Copy built artifacts
 COPY --from=base /app/package.json ./
-COPY --from=base /app/pnpm-lock.yaml ./
-COPY --from=base /app/pnpm-workspace.yaml ./
+COPY --from=base /app/package-lock.json ./
 COPY --from=base /app/apps/api/dist ./apps/api/dist
 COPY --from=base /app/apps/api/package.json ./apps/api/
 COPY --from=base /app/apps/web/dist ./apps/web/dist
