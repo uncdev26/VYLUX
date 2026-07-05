@@ -1,0 +1,61 @@
+# Railway Deployment Dockerfile for VYLUX
+# This bundles the API and website into a single service
+
+FROM node:20-slim AS base
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/design-system/package.json ./packages/design-system/
+COPY packages/database/package.json ./packages/database/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build shared package
+RUN pnpm --filter @newlight/shared build
+
+# Build API
+RUN pnpm --filter @newlight/api build
+
+# Build website
+RUN pnpm --filter @newlight/web build
+
+# Production stage
+FROM node:20-slim AS production
+
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Copy built artifacts
+COPY --from=base /app/package.json ./
+COPY --from=base /app/pnpm-lock.yaml ./
+COPY --from=base /app/pnpm-workspace.yaml ./
+COPY --from=base /app/apps/api/dist ./apps/api/dist
+COPY --from=base /app/apps/api/package.json ./apps/api/
+COPY --from=base /app/apps/web/dist ./apps/web/dist
+COPY --from=base /app/apps/web/package.json ./apps/web/
+COPY --from=base /app/packages/shared/dist ./packages/shared/dist
+COPY --from=base /app/packages/shared/package.json ./packages/shared/
+COPY --from=base /app/packages/design-system/dist ./packages/design-system/dist
+COPY --from=base /app/packages/design-system/package.json ./packages/design-system/
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/apps/api/node_modules ./apps/api/node_modules
+
+# Expose port
+EXPOSE ${PORT:-3000}
+
+# Start command - runs API server which also serves the static website
+CMD ["node", "apps/api/dist/index.js"]
