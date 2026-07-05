@@ -4,16 +4,15 @@ import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
   integrations: [
-    svelte(),
+    svelte({
+      preprocess: []
+    }),
     tailwind()
   ],
   output: 'static',
   vite: {
     optimizeDeps: {
       include: ['@newlight/design-system']
-    },
-    svelte: {
-      preprocess: []
     }
   }
 });
