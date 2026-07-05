@@ -37,3 +37,6 @@ export * from './user';
 export * from './userMemories';
 export * from './verify';
 export * from './workspace';
+
+// VYLUX CMS schema
+export * from './cms';
