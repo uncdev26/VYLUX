@@ -1,4 +1,6 @@
 <script lang="ts">
+  let nextId = 0;
+
   interface Props {
     type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url';
     value?: string;
@@ -20,11 +22,13 @@
     required = false,
     onchange
   }: Props = $props();
+
+  const inputId = `input-${nextId++}`;
 </script>
 
 <div class="input-group">
   {#if label}
-    <label class="label">
+    <label class="label" for={inputId}>
       {label}
       {#if required}
         <span class="required">*</span>
@@ -33,6 +37,7 @@
   {/if}
 
   <input
+    id={inputId}
     {type}
     {placeholder}
     {disabled}
@@ -58,19 +63,19 @@
   .label {
     font-family: var(--font-family);
     font-size: 14px;
-    font-weight: 500;
+    font-weight: var(--font-weight-label);
     color: var(--color-foreground);
   }
 
   .required {
-    color: #EF4444;
+    color: var(--color-error);
   }
 
   .input {
     padding: var(--space-2) var(--space-3);
     font-family: var(--font-family);
     font-size: 16px;
-    border: 1px solid #D1D5DB;
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     transition: all 0.2s ease;
   }
@@ -82,16 +87,16 @@
   }
 
   .input.error {
-    border-color: #EF4444;
+    border-color: var(--color-error);
   }
 
   .input:disabled {
-    background-color: #F3F4F6;
+    background-color: var(--color-disabled);
     cursor: not-allowed;
   }
 
   .error-text {
     font-size: 14px;
-    color: #EF4444;
+    color: var(--color-error);
   }
 </style>

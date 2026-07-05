@@ -24,7 +24,7 @@
   }
 
   .card-default {
-    border: 1px solid #E5E7EB;
+    border: 1px solid var(--color-border);
   }
 
   .card-outlined {

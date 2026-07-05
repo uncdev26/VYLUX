@@ -6,11 +6,15 @@
   --color-background: #FFFFFF;
   --color-foreground: #1F2937;
   --color-muted: #6B7280;
+  --color-error: #EF4444;
+  --color-border: #D1D5DB;
+  --color-disabled: #F3F4F6;
 
   /* Typography */
   --font-family: 'Inter', system-ui, sans-serif;
   --font-weight-heading: 700;
   --font-weight-body: 400;
+  --font-weight-label: 500;
 
   /* Spacing */
   --space-1: 4px;

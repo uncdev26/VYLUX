@@ -19,8 +19,10 @@
 </script>
 
 <button
+  type="button"
   class="btn btn-{variant} btn-{size}"
   {disabled}
+  aria-busy={loading || undefined}
   {onclick}
 >
   {#if loading}
