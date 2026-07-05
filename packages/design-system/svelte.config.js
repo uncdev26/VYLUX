@@ -1,5 +1,9 @@
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-
 export default {
-  preprocess: vitePreprocess()
+  compilerOptions: {
+    css: 'injected'
+  },
+  package: {
+    emitTypes: true,
+    exports: (filepath) => !filepath.endsWith('.svelte')
+  }
 };

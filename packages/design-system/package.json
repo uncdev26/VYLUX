@@ -13,7 +13,7 @@
   },
   "svelte": "./dist/index.js",
   "scripts": {
-    "build": "svelte-package",
+    "build": "svelte-package --no-svelte",
     "lint": "eslint src/"
   },
   "devDependencies": {
