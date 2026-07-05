@@ -51,5 +51,5 @@ export interface Submission {
   data: Record<string, unknown>;
   ip_address: string | null;
   user_agent: string | null;
-  submitted_at: string;
+  created_at: string;
 }
