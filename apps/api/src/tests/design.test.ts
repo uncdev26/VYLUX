@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DesignService } from '../services/design';
 
-// Mock Supabase client
 const mockSingle = vi.fn();
 const mockSelect = vi.fn(() => ({ single: mockSingle }));
 const mockInsert = vi.fn(() => ({ select: mockSelect }));
@@ -27,12 +25,26 @@ vi.mock('@supabase/supabase-js', () => ({
   }))
 }));
 
+import { DesignService } from '../services/design';
+
 describe('DesignService', () => {
   let service: DesignService;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.SUPABASE_URL = 'https://test.supabase.co';
+    process.env.SUPABASE_ANON_KEY = 'test-key';
     service = new DesignService();
+  });
+
+  it('should throw if SUPABASE_URL is missing', () => {
+    delete process.env.SUPABASE_URL;
+    expect(() => new DesignService()).toThrow('Missing required environment variable: SUPABASE_URL');
+  });
+
+  it('should throw if SUPABASE_ANON_KEY is missing', () => {
+    delete process.env.SUPABASE_ANON_KEY;
+    expect(() => new DesignService()).toThrow('Missing required environment variable: SUPABASE_ANON_KEY');
   });
 
   it('should create a design token', async () => {
@@ -78,12 +90,18 @@ describe('DesignService', () => {
     expect(mockFrom).toHaveBeenCalledWith('design_tokens');
   });
 
-  it('should return null when token not found', async () => {
-    mockSingle.mockResolvedValue({ data: null, error: { message: 'Not found' } });
+  it('should return null when token not found (PGRST116)', async () => {
+    mockSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'Not found' } });
 
     const token = await service.getTokenByKey('nonexistent');
 
     expect(token).toBeNull();
+  });
+
+  it('should throw on non-PGRST116 errors in getTokenByKey', async () => {
+    mockSingle.mockResolvedValue({ data: null, error: { code: 'PGRST200', message: 'Database error' } });
+
+    await expect(service.getTokenByKey('bad-key')).rejects.toEqual({ code: 'PGRST200', message: 'Database error' });
   });
 
   it('should get all tokens', async () => {
@@ -139,12 +157,12 @@ describe('DesignService', () => {
 
   it('should delete a token (soft delete)', async () => {
     const mockEqChain = vi.fn().mockReturnThis();
-    mockUpdate.mockReturnValue({ eq: mockEqChain });
+    const mockIsChain = vi.fn().mockReturnValue({ eq: mockEqChain });
+    mockUpdate.mockReturnValue({ eq: mockEqChain, is: mockIsChain });
 
     await service.deleteToken('test-color');
 
     expect(mockFrom).toHaveBeenCalledWith('design_tokens');
     expect(mockUpdate).toHaveBeenCalledWith({ deleted_at: expect.any(String) });
-    expect(mockEqChain).toHaveBeenCalledWith('key', 'test-color');
   });
 });

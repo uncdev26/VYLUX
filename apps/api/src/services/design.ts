@@ -1,14 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { DesignToken, CreateTokenInput, UpdateTokenInput } from '@newlight/shared';
 
 export class DesignService {
-  private supabase;
+  private supabase: SupabaseClient;
 
   constructor() {
-    this.supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
-    );
+    const url = process.env.SUPABASE_URL;
+    const key = process.env.SUPABASE_ANON_KEY;
+
+    if (!url) {
+      throw new Error('Missing required environment variable: SUPABASE_URL');
+    }
+    if (!key) {
+      throw new Error('Missing required environment variable: SUPABASE_ANON_KEY');
+    }
+
+    this.supabase = createClient(url, key);
   }
 
   async createToken(input: CreateTokenInput): Promise<DesignToken> {
@@ -30,7 +37,13 @@ export class DesignService {
       .is('deleted_at', null)
       .single();
 
-    if (error) return null;
+    if (error) {
+      // PGRST116 = Row not found (PostgREST single() returns this when 0 rows)
+      if (error.code === 'PGRST116') {
+        return null;
+      }
+      throw error;
+    }
     return data;
   }
 
@@ -62,7 +75,8 @@ export class DesignService {
     const { error } = await this.supabase
       .from('design_tokens')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('key', key);
+      .eq('key', key)
+      .is('deleted_at', null);
 
     if (error) throw error;
   }

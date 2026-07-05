@@ -1,8 +1,18 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { DesignService } from '../services/design';
 
 const router = Router();
 const service = new DesignService();
+
+const createTokenSchema = z.object({
+  key: z.string().min(1, 'key is required'),
+  value: z.record(z.unknown()),
+});
+
+const updateTokenSchema = z.object({
+  value: z.record(z.unknown()),
+});
 
 // GET /api/design/tokens
 router.get('/tokens', async (req, res) => {
@@ -10,6 +20,7 @@ router.get('/tokens', async (req, res) => {
     const tokens = await service.getAllTokens();
     res.json(tokens);
   } catch (error) {
+    console.error('Failed to fetch tokens:', error);
     res.status(500).json({ error: 'Failed to fetch tokens' });
   }
 });
@@ -23,6 +34,7 @@ router.get('/tokens/:key', async (req, res) => {
     }
     res.json(token);
   } catch (error) {
+    console.error('Failed to fetch token:', error);
     res.status(500).json({ error: 'Failed to fetch token' });
   }
 });
@@ -30,9 +42,18 @@ router.get('/tokens/:key', async (req, res) => {
 // POST /api/design/tokens
 router.post('/tokens', async (req, res) => {
   try {
-    const token = await service.createToken(req.body);
+    const parsed = createTokenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+    const token = await service.createToken(parsed.data);
     res.status(201).json(token);
-  } catch (error) {
+  } catch (error: any) {
+    // PostgREST unique violation (duplicate key)
+    if (error?.code === '23505') {
+      return res.status(409).json({ error: 'Token with this key already exists' });
+    }
+    console.error('Failed to create token:', error);
     res.status(500).json({ error: 'Failed to create token' });
   }
 });
@@ -40,9 +61,18 @@ router.post('/tokens', async (req, res) => {
 // PUT /api/design/tokens/:key
 router.put('/tokens/:key', async (req, res) => {
   try {
-    const token = await service.updateToken(req.params.key, req.body);
+    const parsed = updateTokenSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation failed', details: parsed.error.flatten() });
+    }
+    const token = await service.updateToken(req.params.key, parsed.data);
     res.json(token);
-  } catch (error) {
+  } catch (error: any) {
+    // PGRST116 = Row not found from single()
+    if (error?.code === 'PGRST116') {
+      return res.status(404).json({ error: 'Token not found' });
+    }
+    console.error('Failed to update token:', error);
     res.status(500).json({ error: 'Failed to update token' });
   }
 });
@@ -53,6 +83,7 @@ router.delete('/tokens/:key', async (req, res) => {
     await service.deleteToken(req.params.key);
     res.status(204).send();
   } catch (error) {
+    console.error('Failed to delete token:', error);
     res.status(500).json({ error: 'Failed to delete token' });
   }
 });
