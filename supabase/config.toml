@@ -1,11 +1,11 @@
 [project]
-id = "your-project-id"
-name = "newlight"
+id = "vylux-self-hosted"
+name = "vylux"
 
 [api]
-port = 8000
-schemas = ["public", "graphql_public"]
-extra_search_path = ["public", "extensions"]
+port = 3000
+schemas = ["public"]
+extra_search_path = ["public"]
 max_rows = 1000
 
 [db]
@@ -13,6 +13,6 @@ port = 5432
 major_version = 15
 
 [auth]
-site_url = "http://localhost:4321"
-additional_redirect_urls = ["https://localhost:4321"]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
 jwt_expiry = 3600
