@@ -4,9 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./dist/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
     "./styles/tokens.css": "./dist/styles/tokens.css"
   },
+  "svelte": "./dist/index.js",
   "scripts": {
     "build": "svelte-package",
     "lint": "eslint src/"
