@@ -12,6 +12,7 @@
     "lint": "eslint src/"
   },
   "devDependencies": {
+    "@sveltejs/package": "^2.0.0",
     "svelte": "^5.0.0"
   },
   "peerDependencies": {
