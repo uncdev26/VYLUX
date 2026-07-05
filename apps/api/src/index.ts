@@ -1,10 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import designRoutes from './routes/design';
 import contentRoutes from './routes/content';
 import mediaRoutes from './routes/media';
 import formsRoutes, { submitRouter } from './routes/forms';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
