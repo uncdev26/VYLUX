@@ -4,7 +4,7 @@
 
 ### Option 1: One-Click Deploy
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template-id)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new?templateUrl=https://github.com/uncdev26/VYLUX)
 
 ### Option 2: Manual Deploy
 
