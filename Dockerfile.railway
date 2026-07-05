@@ -1,5 +1,6 @@
 # Railway Deployment Dockerfile for VYLUX
 # This bundles the API and website into a single service
+# Cache bust: 2026-07-05T05:15
 
 FROM node:22-slim AS base
 
