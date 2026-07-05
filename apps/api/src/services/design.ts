@@ -36,7 +36,7 @@ export class DesignService {
     const { data, error } = await this.supabase
       .from('design_tokens')
       .select('*')
-      .eq('key', key)
+      .eq('name', key)
       .is('deleted_at', null)
       .single();
 
@@ -65,7 +65,7 @@ export class DesignService {
     const { data, error } = await this.supabase
       .from('design_tokens')
       .update({ ...input, updated_at: new Date().toISOString() })
-      .eq('key', key)
+      .eq('name', key)
       .is('deleted_at', null)
       .select()
       .single();
@@ -78,7 +78,7 @@ export class DesignService {
     const { error } = await this.supabase
       .from('design_tokens')
       .update({ deleted_at: new Date().toISOString() })
-      .eq('key', key)
+      .eq('name', key)
       .is('deleted_at', null);
 
     if (error) throw error;
