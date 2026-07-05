@@ -1,21 +1,26 @@
-# VYLUX - Self-Hosted Supabase Stack
-# For local development. On Railway, use Railway's PostgreSQL plugin + PostgREST service.
+# VYLUX - Local Development Stack
+# Run: ./scripts/setup-local.sh && docker compose up -d
 
 services:
-  # PostgreSQL with Supabase extensions (local dev)
+  # PostgreSQL with Supabase extensions
   db:
     image: supabase/postgres:15.14.1.142
     ports:
       - "5433:5432"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      JWT_SECRET: ${JWT_SECRET:-i51VeqhMHU0mzVLUAOdG4gRTAXWUngj8}
+      JWT_SECRET: ${JWT_SECRET:-changeme}
     volumes:
       - supabase-data:/var/lib/postgresql/data
       - ./packages/database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
       - ./packages/database/seeds/01_design_tokens.sql:/docker-entrypoint-initdb.d/02_seeds.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # PostgREST - REST API for PostgreSQL (Supabase-compatible)
+  # PostgREST - Supabase-compatible REST API
   postgrest:
     image: postgrest/postgrest:latest
     ports:
@@ -24,34 +29,27 @@ services:
       PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/postgres
       PGRST_DB_SCHEMAS: public
       PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: ${JWT_SECRET:-i51VeqhMHU0mzVLUAOdG4gRTAXWUngj8}
+      PGRST_JWT_SECRET: ${JWT_SECRET:-changeme}
       PGRST_DB_MAX_ROWS: 1000
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
-  # LobeHub (AI features)
-  lobehub:
-    image: lobehub/lobehub:latest
-    ports:
-      - "3210:3210"
-    environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/postgres
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-    depends_on:
-      - db
-
-  # VYLUX Website (Astro + Svelte)
-  website:
+  # VYLUX API + Website (combined service)
+  api:
     build:
       context: .
-      dockerfile: apps/web/Dockerfile
+      dockerfile: Dockerfile.railway
     ports:
-      - "4321:4321"
+      - "3000:3000"
     environment:
-      PUBLIC_SUPABASE_URL: http://postgrest:3000
-      PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_URL: http://postgrest:3000
+      SUPABASE_ANON_KEY: ${SERVICE_ROLE_KEY:-changeme}
+      NODE_ENV: production
+      PORT: 3000
     depends_on:
-      - postgrest
+      postgrest:
+        condition: service_started
 
 volumes:
   supabase-data:

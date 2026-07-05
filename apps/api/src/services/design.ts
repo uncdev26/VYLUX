@@ -55,7 +55,7 @@ export class DesignService {
       .from('design_tokens')
       .select('*')
       .is('deleted_at', null)
-      .order('key');
+      .order('name');
 
     if (error) throw error;
     return data || [];
