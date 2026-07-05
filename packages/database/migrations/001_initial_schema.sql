@@ -4,11 +4,22 @@
 -- Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
-CREATE EXTENSION IF NOT EXISTS "btree_gin";
 
 -- ENUM types
 CREATE TYPE content_status AS ENUM ('draft', 'published', 'archived');
 CREATE TYPE form_status AS ENUM ('active', 'inactive', 'archived');
+
+-- =============================================================================
+-- Shared trigger: auto-set updated_at on row update
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- =============================================================================
 -- Design System tables
@@ -88,9 +99,9 @@ CREATE TABLE posts (
     content JSONB NOT NULL DEFAULT '{}',
     excerpt TEXT,
     status content_status DEFAULT 'draft',
-    author_id UUID,
+    author_id UUID,          -- intentionally no FK: auth.users cannot be referenced in Supabase
     category_id UUID REFERENCES categories(id),
-    featured_image UUID,
+    featured_image UUID,     -- intentionally no FK: points to media(id) but avoids circular dependency risk
     seo JSONB DEFAULT '{}',
     metadata JSONB DEFAULT '{}',
     published_at TIMESTAMP WITH TIME ZONE,
@@ -101,6 +112,8 @@ CREATE TABLE posts (
 
 CREATE INDEX idx_posts_slug ON posts(slug);
 CREATE INDEX idx_posts_status ON posts(status);
+CREATE INDEX idx_posts_category ON posts(category_id);
+CREATE INDEX idx_posts_published_at ON posts(published_at) WHERE published_at IS NOT NULL;
 CREATE INDEX idx_posts_content ON posts USING GIN(content);
 CREATE INDEX idx_posts_seo ON posts USING GIN(seo);
 CREATE INDEX idx_posts_metadata ON posts USING GIN(metadata);
@@ -148,7 +161,7 @@ CREATE TABLE media (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     filename TEXT NOT NULL,
     mime_type TEXT NOT NULL,
-    size INTEGER NOT NULL,
+    size INTEGER NOT NULL CHECK (size >= 0),
     width INTEGER,
     height INTEGER,
     storage_path TEXT NOT NULL,
@@ -190,7 +203,7 @@ CREATE TABLE sitemaps (
     url TEXT NOT NULL UNIQUE,
     last_modified TIMESTAMP WITH TIME ZONE,
     change_frequency TEXT,
-    priority DECIMAL(2,1),
+    priority DECIMAL(2,1) CHECK (priority >= 0.0 AND priority <= 1.0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     deleted_at TIMESTAMP WITH TIME ZONE
@@ -200,7 +213,7 @@ CREATE TABLE redirects (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     from_path TEXT NOT NULL UNIQUE,
     to_path TEXT NOT NULL,
-    status_code INTEGER DEFAULT 301,
+    status_code INTEGER DEFAULT 301 CHECK (status_code IN (301, 302, 307, 308)),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -256,6 +269,7 @@ CREATE TABLE branding_assets (
 );
 
 CREATE INDEX idx_branding_assets_type ON branding_assets(type);
+CREATE INDEX idx_branding_assets_media ON branding_assets(media_id);
 
 -- =============================================================================
 -- Navigation tables
@@ -297,11 +311,13 @@ CREATE TABLE menu_items (
     config JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    deleted_at TIMESTAMP WITH TIME ZONE
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    CHECK (url IS NOT NULL OR page_id IS NOT NULL)
 );
 
 CREATE INDEX idx_menu_items_type ON menu_items(menu_type);
 CREATE INDEX idx_menu_items_parent ON menu_items(parent_id);
+CREATE INDEX idx_menu_items_page ON menu_items(page_id);
 CREATE INDEX idx_menu_items_config ON menu_items USING GIN(config);
 
 -- =============================================================================
@@ -317,11 +333,84 @@ CREATE TABLE audit_logs (
     old_data JSONB,
     new_data JSONB,
     ip_address INET,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    deleted_at TIMESTAMP WITH TIME ZONE
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_table ON audit_logs(table_name, record_id);
 CREATE INDEX idx_audit_logs_created ON audit_logs(created_at);
+
+-- =============================================================================
+-- updated_at triggers (all tables except audit_logs, which are immutable)
+-- =============================================================================
+
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON design_tokens    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON design_components FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON design_themes    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON categories       FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON tags             FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON posts            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON pages            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON media_folders    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON media            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON seo_configs      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON sitemaps         FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON redirects        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON forms            FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON submissions      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON branding_assets  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON header_configs   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON footer_configs   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_updated_at BEFORE UPDATE ON menu_items       FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- =============================================================================
+-- Row Level Security
+-- All tables locked down; the service_role key bypasses RLS automatically,
+-- so only the service_role (used by the Next.js API) can read/write.
+-- =============================================================================
+
+ALTER TABLE design_tokens    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE design_components ENABLE ROW LEVEL SECURITY;
+ALTER TABLE design_themes    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE categories       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tags             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE posts            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE posts_tags       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pages            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media_folders    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE seo_configs      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sitemaps         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE redirects        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE forms            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE submissions      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE branding_assets  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE header_configs   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE footer_configs   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE menu_items       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs       ENABLE ROW LEVEL SECURITY;
+
+-- Service-role policies (full access for the backend API)
+-- service_role bypasses RLS in Supabase, so these are fallback policies
+-- for any role that does authenticate against PostgREST.
+
+CREATE POLICY "service_all" ON design_tokens    FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON design_components FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON design_themes    FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON categories       FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON tags             FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON posts            FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON posts_tags       FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON pages            FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON media_folders    FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON media            FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON seo_configs      FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON sitemaps         FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON redirects        FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON forms            FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON submissions      FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON branding_assets  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON header_configs   FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON footer_configs   FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON menu_items       FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "service_all" ON audit_logs       FOR ALL TO service_role USING (true) WITH CHECK (true);
