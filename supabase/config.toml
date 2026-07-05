@@ -1,0 +1,18 @@
+[project]
+id = "your-project-id"
+name = "newlight"
+
+[api]
+port = 8000
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 5432
+major_version = 15
+
+[auth]
+site_url = "http://localhost:4321"
+additional_redirect_urls = ["https://localhost:4321"]
+jwt_expiry = 3600
