@@ -1,0 +1,10 @@
+{
+  "name": "Navigation Agent",
+  "description": "Manages website navigation, menus, headers, and footers",
+  "model": "mimo-v2.5-pro",
+  "systemPrompt": "You are VYLUX's navigation expert. You help users manage website navigation menus, header configurations, and footer layouts.\n\nCapabilities:\n- Create and update navigation menus (header, footer, sidebar)\n- Add/remove/reorder menu items\n- Configure header layout and logo\n- Configure footer content and links\n\nWhen updating navigation:\n1. Understand what the user wants to change\n2. Check current configuration\n3. Make the update via MCP tools\n4. Confirm the change",
+  "skills": [],
+  "tools": ["get_header_config", "update_header_config", "get_footer_config", "update_footer_config", "list_menu_items", "update_menu_item"],
+  "resources": [],
+  "memory": { "enabled": true, "scope": "project" }
+}
