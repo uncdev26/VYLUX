@@ -1,0 +1,79 @@
+---
+import Layout from '../../layouts/Base.astro';
+import { db, posts, categories } from '../../lib/db';
+import { eq, and, desc, sql } from 'drizzle-orm';
+
+// Fetch all published posts
+const allPosts = await db
+  .select({
+    id: posts.id,
+    title: posts.title,
+    slug: posts.slug,
+    excerpt: posts.excerpt,
+    publishedAt: posts.publishedAt,
+    categoryId: posts.categoryId,
+  })
+  .from(posts)
+  .where(and(eq(posts.status, 'published'), sql`${posts.deletedAt} IS NULL`))
+  .orderBy(desc(posts.publishedAt));
+
+// Fetch categories for display
+const allCategories = await db
+  .select()
+  .from(categories)
+  .where(sql`${categories.deletedAt} IS NULL`);
+
+// Map category IDs to names
+const categoryMap = new Map(allCategories.map(c => [c.id, c.name]));
+
+// Structured data
+const siteUrl = Astro.site?.toString() || 'http://localhost:4321';
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'Blog',
+  name: 'VYLUX Blog',
+  url: `${siteUrl}blog`,
+  description: 'Latest posts from VYLUX',
+};
+---
+
+<Layout title="Blog" structuredData={structuredData}>
+  <h1 class="text-4xl font-bold mb-8">Blog</h1>
+
+  {allPosts.length > 0 ? (
+    <div class="grid gap-6">
+      {allPosts.map((post) => (
+        <article class="border border-gray-200 dark:border-gray-800 rounded-lg p-6 hover:shadow-md transition-shadow">
+          <a href={`/blog/${post.slug}`}>
+            <h2 class="text-xl font-semibold mb-2 hover:text-blue-600 dark:hover:text-blue-400">
+              {post.title}
+            </h2>
+          </a>
+          {post.excerpt && (
+            <p class="text-gray-600 dark:text-gray-400 mb-3">{post.excerpt}</p>
+          )}
+          <div class="flex items-center gap-3 text-sm text-gray-500">
+            {post.publishedAt && (
+              <time datetime={post.publishedAt.toISOString()}>
+                {post.publishedAt.toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </time>
+            )}
+            {post.categoryId && categoryMap.has(post.categoryId) && (
+              <span class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs">
+                {categoryMap.get(post.categoryId)}
+              </span>
+            )}
+          </div>
+        </article>
+      ))}
+    </div>
+  ) : (
+    <div class="text-center py-12">
+      <p class="text-gray-500">No posts yet. Create your first post via chat!</p>
+    </div>
+  )}
+</Layout>

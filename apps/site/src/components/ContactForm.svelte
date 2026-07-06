@@ -16,16 +16,33 @@
   let submitted = $state(false);
   let error = $state('');
 
-  function handleSubmit() {
+  async function handleSubmit() {
     isSubmitting = true;
     error = '';
 
-    // TODO: Submit to CMS via API endpoint
-    // For now, simulate submission
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          form_id: formId,
+          data: formData,
+          user_agent: navigator.userAgent,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        submitted = true;
+      } else {
+        error = result.error || 'Submission failed. Please try again.';
+      }
+    } catch (err) {
+      error = 'Network error. Please check your connection and try again.';
+    } finally {
       isSubmitting = false;
-      submitted = true;
-    }, 1000);
+    }
   }
 </script>
 
