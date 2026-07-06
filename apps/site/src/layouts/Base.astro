@@ -52,6 +52,9 @@ const fullTitle = title === 'VYLUX — Home' ? title : `${title} | VYLUX`;
       <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
     )}
 
+    <!-- Design Tokens CSS (generated from database) -->
+    <link rel="stylesheet" href="/api/design-tokens.css" />
+
     <title>{fullTitle}</title>
     <slot name="head" />
   </head>
