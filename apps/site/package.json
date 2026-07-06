@@ -1,0 +1,26 @@
+{
+  "name": "@vylux/site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/node": "^10.0.0",
+    "@astrojs/svelte": "^7.0.0",
+    "@astrojs/tailwind": "^6.0.0",
+    "@lobechat/database": "workspace:*",
+    "astro": "^5.0.0",
+    "drizzle-orm": "*",
+    "pg": "^8.13.0",
+    "svelte": "^5.0.0",
+    "tailwindcss": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.0"
+  }
+}
