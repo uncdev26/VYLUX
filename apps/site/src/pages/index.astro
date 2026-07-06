@@ -22,9 +22,19 @@ const allCategories = await db
   .select()
   .from(categories)
   .where(sql`${categories.deletedAt} IS NULL`);
+
+// Structured data
+const siteUrl = Astro.site?.toString() || 'http://localhost:4321';
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'VYLUX',
+  url: siteUrl,
+  description: 'AI-powered content management. Chat to create.',
+};
 ---
 
-<Layout title="VYLUX — Home">
+<Layout title="VYLUX — Home" structuredData={structuredData}>
   <section class="mb-12">
     <h1 class="text-4xl font-bold mb-4">Welcome to VYLUX</h1>
     <p class="text-lg text-gray-600 dark:text-gray-400">

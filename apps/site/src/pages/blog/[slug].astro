@@ -1,6 +1,6 @@
 ---
 import Layout from '../../layouts/Base.astro';
-import { db, posts, categories } from '../../lib/db';
+import { db, posts, categories, seoConfigs } from '../../lib/db';
 import { eq, and, sql } from 'drizzle-orm';
 
 const { slug } = Astro.params;
@@ -25,16 +25,65 @@ if (post.categoryId) {
     .where(eq(categories.id, post.categoryId))
     .limit(1);
 }
+
+// Fetch SEO config
+const [seoConfig] = await db
+  .select()
+  .from(seoConfigs)
+  .where(and(
+    eq(seoConfigs.pageType, 'post'),
+    eq(seoConfigs.pageId, post.id),
+    sql`${seoConfigs.deletedAt} IS NULL`,
+  ))
+  .limit(1);
+
+// Build SEO meta
+const seoTitle = seoConfig?.title || post.title;
+const seoDescription = seoConfig?.description || post.excerpt || '';
+const siteUrl = Astro.site?.toString() || 'http://localhost:4321';
+const canonicalUrl = `${siteUrl}blog/${post.slug}`;
+
+// Build structured data (Schema.org Article)
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: post.title,
+  description: seoDescription,
+  datePublished: post.publishedAt?.toISOString(),
+  dateModified: post.updatedAt?.toISOString(),
+  author: {
+    '@type': 'Organization',
+    name: 'VYLUX',
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'VYLUX',
+  },
+  mainEntityOfPage: {
+    '@type': 'WebPage',
+    '@id': canonicalUrl,
+  },
+};
+
+// Get OG image from SEO config or featured image
+const ogImage = seoConfig?.ogImage ? `${siteUrl}api/media/${seoConfig.ogImage}` : undefined;
 ---
 
-<Layout title={post.title} description={post.excerpt || ''}>
+<Layout
+  title={seoTitle}
+  description={seoDescription}
+  ogType="article"
+  canonicalUrl={canonicalUrl}
+  ogImage={ogImage}
+  structuredData={structuredData}
+>
   <article class="prose prose-lg dark:prose-invert max-w-none">
     <header class="mb-8">
       <h1 class="text-4xl font-bold mb-4">{post.title}</h1>
       <div class="flex items-center gap-4 text-gray-500 text-sm">
         {post.publishedAt && (
-          <time>
-            {new Date(post.publishedAt).toLocaleDateString('en-US', {
+          <time datetime={post.publishedAt.toISOString()}>
+            {post.publishedAt.toLocaleDateString('en-US', {
               year: 'numeric',
               month: 'long',
               day: 'numeric',
@@ -42,9 +91,9 @@ if (post.categoryId) {
           </time>
         )}
         {category && (
-          <span class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs">
+          <a href={`/category/${category.slug}`} class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-700">
             {category.name}
-          </span>
+          </a>
         )}
       </div>
     </header>
